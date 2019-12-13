@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            height: 100%;
+            margin: 0;
+            width: 100%;
+            overflow: hidden;
+            background-color: lightgrey;
+        }
+
+        div, input, button, li {
+            font-size: large;
+        }
+        form {
+            width: 100px;
+            height: 100px;
+
+            position: absolute;
+            top:0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+
+            margin: auto;
+        }
+        .x {
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .x:focus{
+            border: 2px solid rgb(128, 189, 255);;
+        }
+    </style>
+</head>
+<body>
+<form>
+    <div>
+        <label for="login">Login:</label>
+        <input type="text" class="x" id="login">
+    </div>
+    <div>
+        <label for="password">Password:</label>
+        <input type="password" class="x" id="password">
+    </div>
+    <button type="submit" class="x" id="button">Login</button>
+</form>
+
+<script>
+  document.getElementById('button').addEventListener("click", e => {
+    e.preventDefault();
+  var q = {
+    query: "mutation login($login: String!, $password: String!) { login(login: $login, password: $password) { token } }",
+    variables: {
+      login: document.getElementById('login').value,
+      password: document.getElementById('password').value
+    }
+  };
+  var url = "/api/graphql";
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", url, true);
+  xhr.setRequestHeader("Content-type", "application/json");
+  xhr.send(JSON.stringify(q, null, 2));
+  xhr.onreadystatechange = function() {//Call a function when the state changes.
+    if(xhr.readyState > 1 && xhr.status === 200) {
+      localStorage.setItem('Authorization', JSON.parse(xhr.responseText).data.login.token);
+      window.location.replace('/graphiql');
+    } else if(xhr.readyState === 4 && xhr.status !== 200) {
+      alert("Can't login");
+    }
+  }
+  });
+</script>
+</body>
+</html>
