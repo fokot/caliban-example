@@ -10,6 +10,7 @@ val calibanHttp4s = "com.github.ghostdogpr" %% "caliban-http4s" % "0.3.1" withSo
 val zio = "dev.zio" %% "zio" % "1.0.0-RC17"
 val kindProjector = "org.typelevel" %% "kind-projector" % "0.11.0" cross CrossVersion.full
 val jwt = "com.pauldijou" %% "jwt-circe" % "4.2.0"
+val circeGenericExtras = "io.circe" %% "circe-generic-extras" % "0.12.2"
 
 lazy val root = (project in file("."))
   .settings(
@@ -20,6 +21,7 @@ lazy val root = (project in file("."))
       calibanHttp4s,
       zio,
       jwt,
+      circeGenericExtras,
       scalaTest % Test,
     )
   )
