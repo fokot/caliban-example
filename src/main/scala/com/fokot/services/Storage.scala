@@ -1,8 +1,8 @@
 package com.fokot.services
 
 import com.fokot.exceptions.InputDataException
-import com.fokot.services.model.{Author, Book}
-import zio.{RIO, Task, UIO, ZIO}
+import com.fokot.services.model.{Author, Book, User}
+import zio.{RIO, Task}
 import zio.console.Console
 
 trait Storage {
@@ -30,6 +30,10 @@ object Storage {
     def getAuthors(ids: List[Long]): F[List[Author]]
 
     def getBooksForAuthor(id: Long): F[List[Book]]
+
+    def getBooksForUser(u: User): F[List[Book]]
+
+    def borrowBook(u: User, bookId: Long): F[Unit]
   }
 }
 
@@ -56,26 +60,28 @@ class FakeStorage extends Storage.Service[Console] {
     Author(3, "Dave", "Logan")
   )
 
+  var userBooks: Map[User, List[Long]] = Map.empty
+
   def authorsById: Map[Long, Author] = authors.map(a => (a.id, a)).toMap
 
   override def getAllBooks(): F[List[Book]] =
     putStrLn("getAllBooks") as books
 
   override def getBook(id: Long): F[Book] =
-    putStrLn("getBook") >>> Task.effect(booksById(id))
+    putStrLn("getBook") *> Task.effect(booksById(id))
 
   override def createBook(b: Book): F[Book] =
-    putStrLn("createBook") >>>
-      Task.succeed(books).filterOrFail(_.forall(_.id != b.id))(InputDataException(s"Book with ${b.id} already exists")) >>>
+    putStrLn("createBook") *>
+      Task.succeed(books).filterOrFail(_.forall(_.id != b.id))(InputDataException(s"Book with ${b.id} already exists")) *>
       Task.effect{ books = b :: books } as b
 
   override def updateBook(b: Book): F[Book] =
-    putStrLn("updateBook") >>> Task.effect{
+    putStrLn("updateBook") *> Task.effect{
       books = books.map { case x if x.id == b.id => b; case x => x }
     } as b
 
   override def deleteBook(id: Long): F[Unit] =
-    putStrLn("deleteBook") >>> Task.effect {
+    putStrLn("deleteBook") *> Task.effect {
       books = books.filterNot(_.id == id)
     }
 
@@ -87,6 +93,14 @@ class FakeStorage extends Storage.Service[Console] {
 
   override def getBooksForAuthor(id: Long): F[List[Book]] =
     putStrLn(s"getBooksForAuthor $id") as books.filter(_.authorId == id)
+
+  override def getBooksForUser(u: User): F[List[Book]] =
+    putStrLn(s"getBooksForUser ${u.login}") as userBooks.getOrElse(u, Nil).map(booksById)
+
+  override def borrowBook(u: User, bookId: Long): F[Unit] =
+    putStrLn(s"borrowBook ${bookId} by ${u.login}") *> Task.effect {
+      userBooks = userBooks.updatedWith(u)(ids => Some(bookId :: ids.getOrElse(Nil)))
+    }
 }
 
 

@@ -69,6 +69,9 @@ object GQL {
   def book(args: BookId): Z[Book] =
     isViewer *> ZIO.accessM[Env](_.storage.getBook(args.id).map(bookToGQL))
 
+  def myBooks: Z[List[Book]] =
+    isViewer >>= (u => ZIO.accessM[Env](_.storage.getBooksForUser(u).map(_.map(bookToGQL))))
+
   def createBook(args: BookInput): Z[Book] =
     isEditor *> ZIO.accessM[Env](_.storage.createBook(bookInputFromGQL(args)).map(bookToGQL))
 
@@ -77,6 +80,12 @@ object GQL {
 
   def deleteBook(args: BookId): Z[Unit] =
     isEditor *> ZIO.accessM[Env](_.storage.deleteBook(args.id))
+
+  def borrowBook(args: BookId): Z[Book] =
+    isViewer >>= (u =>
+      ZIO.accessM[Env](_.storage.borrowBook(u, args.id)) *>
+      ZIO.accessM[Env](_.storage.getBook(args.id).map(bookToGQL))
+    )
 
   def login(args: Login): Z[Logged] =
     (args match {
@@ -100,12 +109,14 @@ object GQL {
       Queries(
         books,
         book,
+        myBooks,
       ),
       Mutation(
         login,
         createBook,
         updateBook,
         deleteBook,
+        borrowBook,
       )
     )
   )

@@ -48,7 +48,8 @@ package object graphql {
 
   case class Queries(
     books: Z[List[Book]],
-    book: BookId => Z[Book]
+    book: BookId => Z[Book],
+    myBooks: Z[List[Book]],
   )
 
   case class Mutation(
@@ -56,5 +57,6 @@ package object graphql {
     createBook: BookInput => Z[Book],
     updateBook: BookInput => Z[Book],
     deleteBook: BookId => Z[Unit],
+    borrowBook: BookId => Z[Book],
   )
 }
