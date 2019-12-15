@@ -26,10 +26,10 @@ trait Auth {
 object Auth {
 
   trait Service[R] {
-    def token: RIO[R, User]
+    def currentUser: RIO[R, User]
   }
 
-  case class SimpleService(token: Task[User]) extends Auth.Service[Any]
+  case class SimpleService(currentUser: Task[User]) extends Auth.Service[Any]
 }
 
 /**

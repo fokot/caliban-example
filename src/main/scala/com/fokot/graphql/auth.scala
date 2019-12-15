@@ -9,7 +9,7 @@ object auth {
 
   type Authorized = RIO[Auth, User]
 
-  val isAuthenticated: Authorized = ZIO.accessM[Auth](_.auth.token)
+  val isAuthenticated: Authorized = ZIO.accessM[Auth](_.auth.currentUser)
 
   /**
    * Will succeed if user has at least one of specified roles
