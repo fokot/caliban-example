@@ -81,11 +81,11 @@ object GQL {
   def deleteBook(args: BookId): Z[Unit] =
     isEditor *> ZIO.accessM[Env](_.storage.deleteBook(args.id))
 
-  def borrowBook(args: BookId): Z[Book] =
-    isViewer >>= (u =>
-      ZIO.accessM[Env](_.storage.borrowBook(u, args.id)) *>
-      ZIO.accessM[Env](_.storage.getBook(args.id).map(bookToGQL))
-    )
+  def borrowBook(args: BookId): Z[List[Book]] = ZIO.succeed(Nil)
+//    isViewer >>= (u =>
+//      ZIO.accessM[Env](_.storage.borrowBook(u, args.id)) *>
+//      ZIO.accessM[Env](_.storage.getBook(args.id).map(bookToGQL))
+//    )
 
   def login(args: Login): Z[Logged] =
     (args match {

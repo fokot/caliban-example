@@ -57,6 +57,6 @@ package object graphql {
     createBook: BookInput => Z[Book],
     updateBook: BookInput => Z[Book],
     deleteBook: BookId => Z[Unit],
-    borrowBook: BookId => Z[Book],
+    borrowBook: BookId => Z[List[Book]],
   )
 }
