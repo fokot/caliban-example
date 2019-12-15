@@ -52,7 +52,7 @@ package object graphql {
     myBooks: Z[List[Book]],
   )
 
-  case class Mutation(
+  case class Mutations(
     login: Login => Z[Logged],
     createBook: BookInput => Z[Book],
     updateBook: BookInput => Z[Book],

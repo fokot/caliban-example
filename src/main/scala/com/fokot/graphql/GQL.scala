@@ -104,14 +104,14 @@ object GQL {
   object schema extends GenericSchema[Env]
   import schema._
 
-  val interpreter = graphQL[Env, Queries, Mutation, Unit](
+  val interpreter = graphQL[Env, Queries, Mutations, Unit](
     RootResolver(
       Queries(
         books,
         book,
         myBooks,
       ),
-      Mutation(
+      Mutations(
         login,
         createBook,
         updateBook,
