@@ -129,7 +129,7 @@
     }).then(function (responseBody) {
       try {
         const p = JSON.parse(responseBody);
-        if(p.errors.length > 0 && p.errors.find(e => e.message.includes('Auth'))){
+        if(p.errors.length > 0 && p.errors.find(e => e.includes('Auth'))){
           window.location.replace('/login.html')
           return;
         }

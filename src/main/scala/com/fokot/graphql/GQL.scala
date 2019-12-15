@@ -3,10 +3,20 @@ package com.fokot.graphql
 import caliban.schema.GenericSchema
 import caliban.GraphQL.graphQL
 import caliban.RootResolver
-import com.fokot.services.model
+import com.fokot.exceptions.AuthException
+import com.fokot.services.{JWT, Storage, model}
 import zio.ZIO
 import zquery.{CompletedRequestMap, DataSource, Request, ZQuery}
+import com.fokot.graphql.auth.{isEditor, isViewer}
+import com.fokot.services.JWT.JWTConfig
+import com.fokot.services.model.{Role, User}
+import com.fokot.utils.WC
+import zio.clock.Clock
 
+
+/**
+ * GraphQL resolvers
+ */
 object GQL {
 
   case class GetAuthor(id: Long) extends Request[Throwable, model.Author]
@@ -37,6 +47,14 @@ object GQL {
       getAuthor(b.authorId)
     )
 
+  def bookInputFromGQL(b: BookInput): model.Book =
+    model.Book(
+      b.id,
+      b.name,
+      b.publishedYear,
+      b.authorId
+    )
+
   def authorToGQL(a: model.Author): Author =
     Author(
       a.id,
@@ -45,16 +63,49 @@ object GQL {
       getBooksForAuthor(a.id).map(_.map(bookToGQL))
     )
 
-  val books: Z[List[Book]] = ZIO
-    .accessM[Env](_.storage.getAllBooks().map(_.map(bookToGQL)))
+  val books: Z[List[Book]] =
+    isViewer *> ZIO.accessM[Env](_.storage.getAllBooks().map(_.map(bookToGQL)))
+
+  def book(args: BookId): Z[Book] =
+    isViewer *> ZIO.accessM[Env](_.storage.getBook(args.id).map(bookToGQL))
+
+  def createBook(args: BookInput): Z[Book] =
+    isEditor *> ZIO.accessM[Env](_.storage.createBook(bookInputFromGQL(args)).map(bookToGQL))
+
+  def updateBook(args: BookInput): Z[Book] =
+    isEditor *> ZIO.accessM[Env](_.storage.updateBook(bookInputFromGQL(args)).map(bookToGQL))
+
+  def deleteBook(args: BookId): Z[Unit] =
+    isEditor *> ZIO.accessM[Env](_.storage.deleteBook(args.id))
+
+  def login(args: Login): Z[Logged] =
+    (args match {
+      case Login("admin", "a")  => JWT.encodeToken(User("admin", Role.Editor))
+      case Login("viewer", "v") => JWT.encodeToken(User("viewer", Role.Viewer))
+      case _                       => ZIO.fail(AuthException("Login failed"))
+    })
+    .map(Logged)
+    .provideSome(
+    (env: Env) => new WC[JWTConfig] with Clock {
+      override def config: JWTConfig = env.config.jwt
+      override val clock: Clock.Service[Any] = env.clock
+    }
+  )
 
   object schema extends GenericSchema[Env]
   import schema._
 
-  val interpreter = graphQL[Env, Queries, Unit, Unit](
+  val interpreter = graphQL[Env, Queries, Mutation, Unit](
     RootResolver(
       Queries(
         books,
+        book,
+      ),
+      Mutation(
+        login,
+        createBook,
+        updateBook,
+        deleteBook,
       )
     )
   )

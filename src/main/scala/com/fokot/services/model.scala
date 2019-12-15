@@ -11,7 +11,7 @@ object model {
     final case object Viewer extends Role
   }
 
-  case class Token(
+  case class User(
     login: String,
     role: Role
   )

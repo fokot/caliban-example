@@ -2,30 +2,34 @@ package com.fokot.services
 
 import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
+
 import cats.syntax.either._
 import cats.syntax.option._
-import com.fokot.services.model.{Role, Token}
+import com.fokot.services.model.{Role, User}
 import com.fokot.utils.WC
 import io.circe.parser.parse
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder}
 import pdi.jwt.algorithms.JwtHmacAlgorithm
-import pdi.jwt.{JwtCirce, JwtClaim}
+import pdi.jwt.{JwtAlgorithm, JwtCirce, JwtClaim}
+import pureconfig.ConfigReader
+import pureconfig.error.CannotConvert
 import zio.clock.Clock
-import zio.{IO, RIO, URIO, ZIO}
+import zio.{IO, RIO, Task, URIO, ZIO}
+
 import scala.util.{Failure, Success}
 
-trait Auth[R] {
-  def auth: Auth.Service[R]
+trait Auth {
+  def auth: Auth.Service[Any]
 }
 
 object Auth {
 
   trait Service[R] {
-    def token: RIO[R, Token]
+    def token: RIO[R, User]
   }
 
-  case class SimpleService[R](token: RIO[R, Token]) extends Auth.Service[R]
+  case class SimpleService(token: Task[User]) extends Auth.Service[Any]
 }
 
 /**
@@ -33,12 +37,23 @@ object Auth {
  */
 object JWT {
 
-  implicit val decodeRole: Decoder[Role] = io.circe.generic.extras.semiauto.deriveEnumerationDecoder
-  implicit val encodeRole: Encoder[Role] = io.circe.generic.extras.semiauto.deriveEnumerationEncoder
-  implicit val decodeToken: Decoder[Token] = io.circe.generic.semiauto.deriveDecoder
-  implicit val encodeToken: Encoder[Token] = io.circe.generic.semiauto.deriveEncoder
+  implicit val RoleDecoder: Decoder[Role] = io.circe.generic.extras.semiauto.deriveEnumerationDecoder
+  implicit val RoleEncoder: Encoder[Role] = io.circe.generic.extras.semiauto.deriveEnumerationEncoder
+  implicit val TokenDecoder: Decoder[User] = io.circe.generic.semiauto.deriveDecoder
+  implicit val TokenEncoder: Encoder[User] = io.circe.generic.semiauto.deriveEncoder
 
   case class JWTConfig(key: String, hmacAlgorithm: JwtHmacAlgorithm, expirationSeconds: Long)
+
+  object JWTConfig {
+    implicit lazy val myHmacAlgorithmReader: ConfigReader[JwtHmacAlgorithm] =
+      ConfigReader[String].emap(algName =>
+        JwtAlgorithm.allHmac()
+          .find(alg => alg.name == algName || alg.fullName == algName)
+          .toRight(CannotConvert(algName, "JwtHmacAlgorithm", "no such algorithm" ))
+      )
+    implicit val reader: ConfigReader[JWTConfig] =
+      pureconfig.generic.semiauto.deriveReader[JWTConfig]
+  }
 
   val getClock = ZIO.accessM[Clock](_.clock.currentDateTime).map(dt => java.time.Clock.fixed(dt.toInstant, ZoneOffset.UTC))
 
@@ -60,20 +75,20 @@ object JWT {
     } yield res
   }
 
-  def decodeTokenPayload(token: String): ZIO[WC[JWTConfig] with Clock, String, Token] =
+  def decodeTokenPayload(token: String): ZIO[WC[JWTConfig] with Clock, String, User] =
     for {
       jwtClaim <- decodeTokenToClaim(token)
       json <- ZIO.fromEither(parse(jwtClaim.content).leftMap(_.message))
-      token <- ZIO.fromEither(json.as[Token].leftMap(_ => "Invalid token."))
+      token <- ZIO.fromEither(json.as[User].leftMap(_ => "Invalid token."))
     } yield token
 
-  def removeBearerAndDecodeTokenPayload(tokenWithBearer: String): ZIO[WC[JWTConfig] with Clock, String, Token] =
+  def removeBearerAndDecodeTokenPayload(tokenWithBearer: String): ZIO[WC[JWTConfig] with Clock, String, User] =
     for {
       rawToken <- removeBearer(tokenWithBearer)
       token <- decodeTokenPayload(rawToken)
     } yield token
 
-  def encodeToken(token: Token): URIO[WC[JWTConfig] with Clock, String] = {
+  def encodeToken(token: User): URIO[WC[JWTConfig] with Clock, String] = {
     for {
       config <- ZIO.access[WC[JWTConfig]](_.config)
       seconds <- ZIO.accessM[Clock](_.clock.currentTime(TimeUnit.SECONDS))

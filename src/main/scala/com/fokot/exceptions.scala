@@ -6,11 +6,5 @@ object exceptions {
   // in that case we can't user Task alias tough
   case class AuthException(message: String) extends Exception
 
-  case class InputValidationException(message: String) extends Exception
-
-  case class ReviewHistoryNotExists(message: String) extends Exception
-
-  case class RatingClassDoesNotExist(message: String) extends Exception
-
-
+  case class InputDataException(message: String) extends Exception
 }
