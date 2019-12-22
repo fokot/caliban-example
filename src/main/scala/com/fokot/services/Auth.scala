@@ -29,6 +29,10 @@ object Auth {
     def currentUser: RIO[R, User]
   }
 
+  object > {
+    def currentUser: RIO[Auth, User] = ZIO.accessM[Auth](_.auth.currentUser)
+  }
+
   case class SimpleService(currentUser: Task[User]) extends Auth.Service[Any]
 }
 

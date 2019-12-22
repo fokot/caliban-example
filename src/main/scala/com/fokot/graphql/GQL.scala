@@ -20,10 +20,10 @@ import zio.clock.Clock
 object GQL {
 
   case class GetAuthor(id: Long) extends Request[Throwable, model.Author]
+
   val AuthorDataSource: DataSource.Service[Env, GetAuthor] =
     DataSource.Service("AuthorDataSource") { requests =>
-      ZIO
-        .accessM[Env](_.storage.getAuthors(requests.toList.map(_.id)))
+      Storage.>.getAuthors(requests.toList.map(_.id))
         .map(
           as =>
             as.foldLeft(CompletedRequestMap.empty) {
@@ -37,7 +37,7 @@ object GQL {
     ZQuery.fromRequestWith(GetAuthor(id))(AuthorDataSource).map(authorToGQL)
 
   def getBooksForAuthor(id: Long): Z[List[model.Book]] =
-    ZIO.accessM[Env](_.storage.getBooksForAuthor(id))
+    Storage.>.getBooksForAuthor(id)
 
   def bookToGQL(b: model.Book): Book =
     Book(
@@ -64,27 +64,38 @@ object GQL {
     )
 
   val books: Z[List[Book]] =
-    isViewer *> ZIO.accessM[Env](_.storage.getAllBooks().map(_.map(bookToGQL)))
+    isViewer *> Storage.>.getAllBooks().map(_.map(bookToGQL))
 
   def book(args: BookId): Z[Book] =
-    isViewer *> ZIO.accessM[Env](_.storage.getBook(args.id).map(bookToGQL))
+    isViewer *> Storage.>.getBook(args.id).map(bookToGQL)
 
-  def myBooks: Z[List[Book]] =
-    isViewer >>= (u => ZIO.accessM[Env](_.storage.getBooksForUser(u).map(_.map(bookToGQL))))
+  def myBooks: Z[MyBooks] =
+    isViewer >>=
+      { u =>
+        for {
+          res <- Storage.>.getBookCount(u).memoize
+
+        } yield
+          MyBooks(
+            res.map(_.total),
+            res.map(_.borrowedNow),
+            Storage.>.getBooksForUser(u).map(_.map(bookToGQL))
+        )
+      }
 
   def createBook(args: BookInput): Z[Book] =
-    isEditor *> ZIO.accessM[Env](_.storage.createBook(bookInputFromGQL(args)).map(bookToGQL))
+    isEditor *> Storage.>.createBook(bookInputFromGQL(args)).map(bookToGQL)
 
   def updateBook(args: BookInput): Z[Book] =
-    isEditor *> ZIO.accessM[Env](_.storage.updateBook(bookInputFromGQL(args)).map(bookToGQL))
+    isEditor *> Storage.>.updateBook(bookInputFromGQL(args)).map(bookToGQL)
 
   def deleteBook(args: BookId): Z[Unit] =
-    isEditor *> ZIO.accessM[Env](_.storage.deleteBook(args.id))
+    isEditor *> Storage.>.deleteBook(args.id)
 
   def borrowBook(args: BookId): Z[Book] =
     isViewer >>= (u =>
-      ZIO.accessM[Env](_.storage.borrowBook(u, args.id)) *>
-      ZIO.accessM[Env](_.storage.getBook(args.id).map(bookToGQL))
+      Storage.>.borrowBook(u, args.id) *>
+      Storage.>.getBook(args.id).map(bookToGQL)
     )
 
   def login(args: Login): Z[Logged] =

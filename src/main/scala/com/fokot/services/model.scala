@@ -29,4 +29,9 @@ object model {
     authorId: Long
   )
 
+  case class BookCount(
+    total: Int,
+    borrowedNow: Int,
+  )
+
 }

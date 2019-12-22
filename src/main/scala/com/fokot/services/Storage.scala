@@ -1,8 +1,8 @@
 package com.fokot.services
 
 import com.fokot.exceptions.InputDataException
-import com.fokot.services.model.{Author, Book, User}
-import zio.{RIO, Task}
+import com.fokot.services.model.{Author, Book, BookCount, User}
+import zio.{RIO, Task, ZIO}
 import zio.console.Console
 
 trait Storage {
@@ -33,7 +33,25 @@ object Storage {
 
     def getBooksForUser(u: User): F[List[Book]]
 
+    def getBookCount(u: User): F[BookCount]
+
     def borrowBook(u: User, bookId: Long): F[Unit]
+  }
+
+  object > {
+    type En = Storage with Console
+    type F[A] = RIO[En, A]
+    def getAllBooks(): F[List[Book]] = ZIO.accessM[En](_.storage.getAllBooks())
+    def getBook(id: Long): F[Book] = ZIO.accessM[En](_.storage.getBook(id))
+    def createBook(b: Book): F[Book] = ZIO.accessM[En](_.storage.createBook(b))
+    def updateBook(b: Book): F[Book] = ZIO.accessM[En](_.storage.updateBook(b))
+    def deleteBook(id: Long): F[Unit] = ZIO.accessM[En](_.storage.deleteBook(id))
+    def getAuthor(id: Long): F[Author] = ZIO.accessM[En](_.storage.getAuthor(id))
+    def getAuthors(ids: List[Long]): F[List[Author]] = ZIO.accessM[En](_.storage.getAuthors(ids))
+    def getBooksForAuthor(id: Long): F[List[Book]] = ZIO.accessM[En](_.storage.getBooksForAuthor(id))
+    def getBooksForUser(u: User): F[List[Book]] = ZIO.accessM[En](_.storage.getBooksForUser(u))
+    def getBookCount(u: User): F[BookCount] = ZIO.accessM[En](_.storage.getBookCount(u))
+    def borrowBook(u: User, bookId: Long): F[Unit] = ZIO.accessM[En](_.storage.borrowBook(u, bookId))
   }
 }
 
@@ -45,11 +63,11 @@ class FakeStorage extends Storage.Service[Console] {
   import zio.console._
 
   var books: List[Book] = List(
-    Book(1, "Harry potter", 2000, 1),
-    Book(2, "Lord of the Rings I.", 1990, 2),
-    Book(3, "Lord of the Rings II.", 1991, 2),
-    Book(4, "Lord of the Rings III.", 1992, 2),
-    Book(5, "Tribal Leadership", 2012, 3)
+      Book(1, "Harry potter", 2000, 1),
+      Book(2, "Lord of the Rings I.", 1990, 2),
+      Book(3, "Lord of the Rings II.", 1991, 2),
+      Book(4, "Lord of the Rings III.", 1992, 2),
+      Book(5, "Tribal Leadership", 2012, 3)
   )
 
   def booksById: Map[Long, Book] = books.map(a => (a.id, a)).toMap
@@ -101,6 +119,9 @@ class FakeStorage extends Storage.Service[Console] {
     putStrLn(s"borrowBook ${bookId} by ${u.login}") *> Task.effect {
       userBooks = userBooks.updatedWith(u)(ids => Some(bookId :: ids.getOrElse(Nil)))
     }
+
+  override def getBookCount(u: User): F[BookCount] =
+    putStrLn(s"getBookCount by ${u.login}") as BookCount(100, 3)
 }
 
 

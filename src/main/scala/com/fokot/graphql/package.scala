@@ -34,6 +34,12 @@ package object graphql {
     author: Q[Author]
   )
 
+  case class MyBooks(
+    total: Z[Int],
+    borrowedNow: Z[Int],
+    books: Z[List[Book]]
+  )
+
   case class Author(
     id: Long,
     firstName: String,
@@ -49,7 +55,7 @@ package object graphql {
   case class Queries(
     books: Z[List[Book]],
     book: BookId => Z[Book],
-    myBooks: Z[List[Book]],
+    myBooks: Z[MyBooks],
   )
 
   case class Mutations(
