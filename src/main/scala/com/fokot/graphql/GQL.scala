@@ -8,6 +8,7 @@ import com.fokot.services.{JWT, Storage, model}
 import zio.ZIO
 import zquery.{CompletedRequestMap, DataSource, Request, ZQuery}
 import com.fokot.graphql.auth.{isEditor, isViewer}
+import com.fokot.graphql.utils.RequestId
 import com.fokot.services.JWT.JWTConfig
 import com.fokot.services.model.{Role, User}
 import com.fokot.utils.WC
@@ -19,22 +20,11 @@ import zio.clock.Clock
  */
 object GQL {
 
-  case class GetAuthor(id: Long) extends Request[Throwable, model.Author]
-
-  val AuthorDataSource: DataSource.Service[Env, GetAuthor] =
-    DataSource.Service("AuthorDataSource") { requests =>
-      Storage.>.getAuthors(requests.toList.map(_.id))
-        .map(
-          as =>
-            as.foldLeft(CompletedRequestMap.empty) {
-              case (map, a) => map.insert(GetAuthor(a.id))(Right(a))
-            }
-        )
-        .orDie
-    }
+  val AuthorDataSource: DataSource.Service[Env, RequestId[Long, model.Author]] =
+    utils.simpleDataSource[Long, model.Author]("AuthorDataSource", Storage.>.getAuthors, _.id)
 
   def getAuthor(id: Long): Q[Author] =
-    ZQuery.fromRequestWith(GetAuthor(id))(AuthorDataSource).map(authorToGQL)
+    ZQuery.fromRequestWith(RequestId[Long, model.Author](id))(AuthorDataSource).map(authorToGQL)
 
   def getBooksForAuthor(id: Long): Z[List[model.Book]] =
     Storage.>.getBooksForAuthor(id)
