@@ -2,16 +2,14 @@ package com.fokot.services
 
 import com.fokot.exceptions.InputDataException
 import com.fokot.services.model.{Author, Book, BookCount, User}
-import zio.{RIO, Task, ZIO}
+import zio.{Has, RIO, Task, ZIO, ZLayer}
 import zio.console.Console
 
-trait Storage {
-  def storage: Storage.Service[Console]
-}
+object storage {
 
-object Storage {
+  type Storage = Has[StorageService[Console]]
 
-  trait Service[R] {
+  trait StorageService[R] {
 
     type F[A] = RIO[Console, A]
 
@@ -41,24 +39,26 @@ object Storage {
   object > {
     type En = Storage with Console
     type F[A] = RIO[En, A]
-    def getAllBooks(): F[List[Book]] = ZIO.accessM[En](_.storage.getAllBooks())
-    def getBook(id: Long): F[Book] = ZIO.accessM[En](_.storage.getBook(id))
-    def createBook(b: Book): F[Book] = ZIO.accessM[En](_.storage.createBook(b))
-    def updateBook(b: Book): F[Book] = ZIO.accessM[En](_.storage.updateBook(b))
-    def deleteBook(id: Long): F[Unit] = ZIO.accessM[En](_.storage.deleteBook(id))
-    def getAuthor(id: Long): F[Author] = ZIO.accessM[En](_.storage.getAuthor(id))
-    def getAuthors(ids: List[Long]): F[List[Author]] = ZIO.accessM[En](_.storage.getAuthors(ids))
-    def getBooksForAuthor(id: Long): F[List[Book]] = ZIO.accessM[En](_.storage.getBooksForAuthor(id))
-    def getBooksForUser(u: User): F[List[Book]] = ZIO.accessM[En](_.storage.getBooksForUser(u))
-    def getBookCount(u: User): F[BookCount] = ZIO.accessM[En](_.storage.getBookCount(u))
-    def borrowBook(u: User, bookId: Long): F[Unit] = ZIO.accessM[En](_.storage.borrowBook(u, bookId))
+    def getAllBooks(): F[List[Book]] = ZIO.accessM[En](_.get.getAllBooks())
+    def getBook(id: Long): F[Book] = ZIO.accessM[En](_.get.getBook(id))
+    def createBook(b: Book): F[Book] = ZIO.accessM[En](_.get.createBook(b))
+    def updateBook(b: Book): F[Book] = ZIO.accessM[En](_.get.updateBook(b))
+    def deleteBook(id: Long): F[Unit] = ZIO.accessM[En](_.get.deleteBook(id))
+    def getAuthor(id: Long): F[Author] = ZIO.accessM[En](_.get.getAuthor(id))
+    def getAuthors(ids: List[Long]): F[List[Author]] = ZIO.accessM[En](_.get.getAuthors(ids))
+    def getBooksForAuthor(id: Long): F[List[Book]] = ZIO.accessM[En](_.get.getBooksForAuthor(id))
+    def getBooksForUser(u: User): F[List[Book]] = ZIO.accessM[En](_.get.getBooksForUser(u))
+    def getBookCount(u: User): F[BookCount] = ZIO.accessM[En](_.get.getBookCount(u))
+    def borrowBook(u: User, bookId: Long): F[Unit] = ZIO.accessM[En](_.get.borrowBook(u, bookId))
   }
+
+  val fakeStorage: Has[StorageService[Console]] = Has(new FakeStorage())
 }
 
 /**
  * This component is stateful so we can't use module pattern :(
  */
-class FakeStorage extends Storage.Service[Console] {
+class FakeStorage extends storage.StorageService[Console] {
 
   import zio.console._
 

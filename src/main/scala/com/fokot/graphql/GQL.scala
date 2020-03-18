@@ -3,15 +3,15 @@ package com.fokot.graphql
 import caliban.schema.GenericSchema
 import caliban.GraphQL.graphQL
 import caliban.RootResolver
+import com.fokot.config
+import com.fokot.config.AppConfig
 import com.fokot.exceptions.AuthException
-import com.fokot.services.{JWT, Storage, model}
-import zio.ZIO
-import zquery.{CompletedRequestMap, DataSource, Request, ZQuery}
+import com.fokot.services.{JWT, model, storage}
+import zio.{Has, ZIO, ZLayer}
+import zquery.{DataSource, ZQuery}
 import com.fokot.graphql.auth.{isEditor, isViewer}
 import com.fokot.graphql.utils.RequestId
-import com.fokot.services.JWT.JWTConfig
 import com.fokot.services.model.{Role, User}
-import com.fokot.utils.WC
 import zio.clock.Clock
 
 
@@ -20,14 +20,14 @@ import zio.clock.Clock
  */
 object GQL {
 
-  val AuthorDataSource: DataSource.Service[Env, RequestId[Long, model.Author]] =
-    utils.simpleDataSource[Long, model.Author]("AuthorDataSource", Storage.>.getAuthors, _.id)
+  val AuthorDataSource: DataSource[Env, RequestId[Long, model.Author]] =
+    utils.simpleDataSource[Long, model.Author]("AuthorDataSource", storage.>.getAuthors, _.id)
 
   def getAuthor(id: Long): Q[Author] =
-    ZQuery.fromRequestWith(RequestId[Long, model.Author](id))(AuthorDataSource).map(authorToGQL)
+    ZQuery.fromRequest(RequestId[Long, model.Author](id))(AuthorDataSource).map(authorToGQL)
 
   def getBooksForAuthor(id: Long): Z[List[model.Book]] =
-    Storage.>.getBooksForAuthor(id)
+    storage.>.getBooksForAuthor(id)
 
   def bookToGQL(b: model.Book): Book =
     Book(
@@ -54,53 +54,49 @@ object GQL {
     )
 
   val books: Z[List[Book]] =
-    isViewer *> Storage.>.getAllBooks().map(_.map(bookToGQL))
+    isViewer *> storage.>.getAllBooks().map(_.map(bookToGQL))
 
   def book(args: BookId): Z[Book] =
-    isViewer *> Storage.>.getBook(args.id).map(bookToGQL)
+    isViewer *> storage.>.getBook(args.id).map(bookToGQL)
 
   def myBooks: Z[MyBooks] =
     isViewer >>=
       { u =>
         for {
-          res <- Storage.>.getBookCount(u).memoize
+          res <- storage.>.getBookCount(u).memoize
 
         } yield
           MyBooks(
             res.map(_.total),
             res.map(_.borrowedNow),
-            Storage.>.getBooksForUser(u).map(_.map(bookToGQL))
-        )
+            storage.>.getBooksForUser(u).map(_.map(bookToGQL))
+            )
       }
 
   def createBook(args: BookInput): Z[Book] =
-    isEditor *> Storage.>.createBook(bookInputFromGQL(args)).map(bookToGQL)
+    isEditor *> storage.>.createBook(bookInputFromGQL(args)).map(bookToGQL)
 
   def updateBook(args: BookInput): Z[Book] =
-    isEditor *> Storage.>.updateBook(bookInputFromGQL(args)).map(bookToGQL)
+    isEditor *> storage.>.updateBook(bookInputFromGQL(args)).map(bookToGQL)
 
   def deleteBook(args: BookId): Z[Unit] =
-    isEditor *> Storage.>.deleteBook(args.id)
+    isEditor *> storage.>.deleteBook(args.id)
 
   def borrowBook(args: BookId): Z[Book] =
     isViewer >>= (u =>
-      Storage.>.borrowBook(u, args.id) *>
-      Storage.>.getBook(args.id).map(bookToGQL)
+      storage.>.borrowBook(u, args.id) *>
+      storage.>.getBook(args.id).map(bookToGQL)
     )
 
   def login(args: Login): Z[Logged] =
     (args match {
       case Login("admin", "a")  => JWT.encodeToken(User("admin", Role.Editor))
       case Login("viewer", "v") => JWT.encodeToken(User("viewer", Role.Viewer))
-      case _                       => ZIO.fail(AuthException("Login failed"))
+      case _                    => ZIO.fail(AuthException("Login failed"))
     })
     .map(Logged)
-    .provideSome(
-    (env: Env) => new WC[JWTConfig] with Clock {
-      override def config: JWTConfig = env.config.jwt
-      override val clock: Clock.Service[Any] = env.clock
-    }
-  )
+    .provideSome(x => x ++ Has(x.get[AppConfig].jwt))
+//    .provideLayer(config.jwtConfig)
 
   object schema extends GenericSchema[Env]
   import schema._
@@ -120,6 +116,9 @@ object GQL {
         borrowBook,
       )
     )
+  ).interpreter.mapError(
+    e =>
+      e.toString()
   )
 
 }

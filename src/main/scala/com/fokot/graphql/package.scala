@@ -1,8 +1,9 @@
 package com.fokot
 
-import com.fokot.services.{Auth, Storage}
-import com.fokot.utils.{Config, WC}
-import zio.RIO
+import com.fokot.services.auth.Auth
+import com.fokot.services.storage.Storage
+import com.fokot.config.AppConfig
+import zio.{Has, RIO}
 import zio.clock.Clock
 import zio.console.Console
 import zquery.ZQuery
@@ -13,10 +14,11 @@ import zquery.ZQuery
 package object graphql {
 
   // environment used to resolve the schema
-  type Env = Storage with Console with Auth with WC[Config] with Clock
+  type Env = Clock with Console with Auth with Storage with Has[AppConfig]
 
   // read value lazily
   type Z[A] = RIO[Env, A]
+
   // read value lazily but batch requests
   type Q[A] = ZQuery[Env, Throwable, A]
 

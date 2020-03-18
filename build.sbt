@@ -1,17 +1,17 @@
-import Dependencies._
-
 ThisBuild / scalaVersion     := "2.13.1"
 ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / organization     := "com.fokot"
 ThisBuild / organizationName := "fokot"
 
-val caliban = "com.github.ghostdogpr" %% "caliban" % "0.3.1" withSources
-val calibanHttp4s = "com.github.ghostdogpr" %% "caliban-http4s" % "0.3.1" withSources
-val zio = "dev.zio" %% "zio" % "1.0.0-RC17"
+val caliban = "com.github.ghostdogpr" %% "caliban" % "0.7.0" withSources
+val calibanHttp4s = "com.github.ghostdogpr" %% "caliban-http4s" % "0.7.0" withSources
+val zio = "dev.zio" %% "zio" % "1.0.0-RC18-2"
 val kindProjector = "org.typelevel" %% "kind-projector" % "0.11.0" cross CrossVersion.full
-val jwt = "com.pauldijou" %% "jwt-circe" % "4.2.0"
-val circeGenericExtras = "io.circe" %% "circe-generic-extras" % "0.12.2"
-val pureconfig = "com.github.pureconfig" %% "pureconfig" % "0.12.1"
+val jwt = "com.pauldijou" %% "jwt-circe" % "4.3.0"
+val circeGenericExtras = "io.circe" %% "circe-generic-extras" % "0.13.0"
+val pureconfig = "com.github.pureconfig" %% "pureconfig" % "0.12.3"
+val scalaTest = "org.scalatest" %% "scalatest" % "3.1.1"
+val logback = "ch.qos.logback" % "logback-classic" % "1.3.0-alpha5"
 
 lazy val root = (project in file("."))
   .settings(
@@ -24,6 +24,7 @@ lazy val root = (project in file("."))
       jwt,
       circeGenericExtras,
       pureconfig,
+      logback,
       scalaTest % Test,
     )
   )

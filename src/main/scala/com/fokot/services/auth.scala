@@ -1,12 +1,12 @@
 package com.fokot.services
 
-import java.time.ZoneOffset
+import java.time
+import java.time.{DateTimeException, ZoneOffset}
 import java.util.concurrent.TimeUnit
 
 import cats.syntax.either._
 import cats.syntax.option._
 import com.fokot.services.model.{Role, User}
-import com.fokot.utils.WC
 import io.circe.parser.parse
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder}
@@ -15,25 +15,23 @@ import pdi.jwt.{JwtAlgorithm, JwtCirce, JwtClaim}
 import pureconfig.ConfigReader
 import pureconfig.error.CannotConvert
 import zio.clock.Clock
-import zio.{IO, RIO, Task, URIO, ZIO}
+import zio.{Has, IO, RIO, Task, URIO, ZIO}
 
 import scala.util.{Failure, Success}
 
-trait Auth {
-  def auth: Auth.Service[Any]
-}
+object auth {
 
-object Auth {
+  type Auth = Has[AuthService[Any]]
 
-  trait Service[R] {
+  trait AuthService[R] {
     def currentUser: RIO[R, User]
   }
 
-  object > {
-    def currentUser: RIO[Auth, User] = ZIO.accessM[Auth](_.auth.currentUser)
-  }
+  def currentUser: RIO[Auth, User] = ZIO.accessM[Auth](
+    _.get.currentUser
+  )
 
-  case class SimpleService(currentUser: Task[User]) extends Auth.Service[Any]
+  case class SimpleService(currentUser: Task[User]) extends AuthService[Any]
 }
 
 /**
@@ -59,14 +57,14 @@ object JWT {
       pureconfig.generic.semiauto.deriveReader[JWTConfig]
   }
 
-  val getClock = ZIO.accessM[Clock](_.clock.currentDateTime).map(dt => java.time.Clock.fixed(dt.toInstant, ZoneOffset.UTC))
+  val getClock: ZIO[Clock, String, time.Clock] = ZIO.accessM[Clock](_.get.currentDateTime).map(dt => java.time.Clock.fixed(dt.toInstant, ZoneOffset.UTC)).mapError(e => e.getMessage)
 
   private def removeBearer(token: String): IO[String, String] =
     IO.succeed(token).filterOrFail(_.startsWith("Bearer "))("Token does not start with 'Bearer '").map(_.substring(7))
 
-  private def decodeTokenToClaim(token: String): ZIO[WC[JWTConfig] with Clock, String, JwtClaim] = {
+  private def decodeTokenToClaim(token: String): ZIO[Has[JWTConfig] with Clock, String, JwtClaim] = {
     for {
-      config <- ZIO.access[WC[JWTConfig]](_.config)
+      config <- ZIO.access[Has[JWTConfig]](_.get)
       clock <- getClock
       res <- JwtCirce.decode(token, config.key, Seq(config.hmacAlgorithm)) match {
         case Success(s) if s.isValid(clock) => // check validity according to available Clock instance
@@ -79,23 +77,23 @@ object JWT {
     } yield res
   }
 
-  def decodeTokenPayload(token: String): ZIO[WC[JWTConfig] with Clock, String, User] =
+  def decodeTokenPayload(token: String): ZIO[Has[JWTConfig] with Clock, String, User] =
     for {
       jwtClaim <- decodeTokenToClaim(token)
       json <- ZIO.fromEither(parse(jwtClaim.content).leftMap(_.message))
       token <- ZIO.fromEither(json.as[User].leftMap(_ => "Invalid token."))
     } yield token
 
-  def removeBearerAndDecodeTokenPayload(tokenWithBearer: String): ZIO[WC[JWTConfig] with Clock, String, User] =
+  def removeBearerAndDecodeTokenPayload(tokenWithBearer: String): ZIO[Has[JWTConfig] with Clock, String, User] =
     for {
       rawToken <- removeBearer(tokenWithBearer)
       token <- decodeTokenPayload(rawToken)
     } yield token
 
-  def encodeToken(token: User): URIO[WC[JWTConfig] with Clock, String] = {
+  def encodeToken(token: User): URIO[Has[JWTConfig] with Clock, String] = {
     for {
-      config <- ZIO.access[WC[JWTConfig]](_.config)
-      seconds <- ZIO.accessM[Clock](_.clock.currentTime(TimeUnit.SECONDS))
+      config <- ZIO.access[Has[JWTConfig]](_.get)
+      seconds <- ZIO.accessM[Clock](_.get.currentTime(TimeUnit.SECONDS))
     } yield JwtCirce.encode(
       JwtClaim(issuedAt = seconds.some, expiration = (seconds + config.expirationSeconds).some, content = token.asJson.noSpaces),
       config.key,
