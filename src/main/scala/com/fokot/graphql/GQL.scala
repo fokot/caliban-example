@@ -21,13 +21,13 @@ import zio.clock.Clock
 object GQL {
 
   val AuthorDataSource: DataSource[Env, RequestId[Long, model.Author]] =
-    utils.simpleDataSource[Long, model.Author]("AuthorDataSource", storage.>.getAuthors, _.id)
+    utils.simpleDataSource[Long, model.Author]("AuthorDataSource", storage.getAuthors, _.id)
 
   def getAuthor(id: Long): Q[Author] =
     ZQuery.fromRequest(RequestId[Long, model.Author](id))(AuthorDataSource).map(authorToGQL)
 
   def getBooksForAuthor(id: Long): Z[List[model.Book]] =
-    storage.>.getBooksForAuthor(id)
+    storage.getBooksForAuthor(id)
 
   def bookToGQL(b: model.Book): Book =
     Book(
@@ -54,38 +54,38 @@ object GQL {
     )
 
   val books: Z[List[Book]] =
-    isViewer *> storage.>.getAllBooks().map(_.map(bookToGQL))
+    isViewer *> storage.getAllBooks().map(_.map(bookToGQL))
 
   def book(args: BookId): Z[Book] =
-    isViewer *> storage.>.getBook(args.id).map(bookToGQL)
+    isViewer *> storage.getBook(args.id).map(bookToGQL)
 
   def myBooks: Z[MyBooks] =
     isViewer >>=
       { u =>
         for {
-          res <- storage.>.getBookCount(u).memoize
+          res <- storage.getBookCount(u).memoize
 
         } yield
           MyBooks(
             res.map(_.total),
             res.map(_.borrowedNow),
-            storage.>.getBooksForUser(u).map(_.map(bookToGQL))
+            storage.getBooksForUser(u).map(_.map(bookToGQL))
             )
       }
 
   def createBook(args: BookInput): Z[Book] =
-    isEditor *> storage.>.createBook(bookInputFromGQL(args)).map(bookToGQL)
+    isEditor *> storage.createBook(bookInputFromGQL(args)).map(bookToGQL)
 
   def updateBook(args: BookInput): Z[Book] =
-    isEditor *> storage.>.updateBook(bookInputFromGQL(args)).map(bookToGQL)
+    isEditor *> storage.updateBook(bookInputFromGQL(args)).map(bookToGQL)
 
   def deleteBook(args: BookId): Z[Unit] =
-    isEditor *> storage.>.deleteBook(args.id)
+    isEditor *> storage.deleteBook(args.id)
 
   def borrowBook(args: BookId): Z[Book] =
     isViewer >>= (u =>
-      storage.>.borrowBook(u, args.id) *>
-      storage.>.getBook(args.id).map(bookToGQL)
+      storage.borrowBook(u, args.id) *>
+      storage.getBook(args.id).map(bookToGQL)
     )
 
   def login(args: Login): Z[Logged] =

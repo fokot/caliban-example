@@ -8,6 +8,7 @@ import com.fokot.exceptions.AuthException
 import com.fokot.graphql.{Env, GQL}
 import com.fokot.services.JWT.JWTConfig
 import com.fokot.services.model.User
+import com.fokot.services.storage.Storage
 import com.fokot.services.{JWT, auth, storage}
 import io.circe.syntax._
 import org.http4s.circe.CirceEntityCodec._
@@ -82,6 +83,7 @@ object Main extends CatsApp {
     (for {
       _appConfig <- config.loadConfig
       _interpreter <- GQL.interpreter
+      _storage <- ZIO.environment[Storage].provideLayer(storage.inMemoryStorage)
       _ <- BlazeServerBuilder[RIO[ZEnv, *]]
         .bindHttp(8000, "localhost")
         .withHttpApp(
@@ -89,7 +91,7 @@ object Main extends CatsApp {
             .of[RIO[ZEnv, *]] {
               case req@POST -> Root / "api" / "graphql" =>
                 //                Http4sAdapter.executeRequest(_interpreter, provideEnv(extractToken(req), _appConfig))(req)
-                executeRequest(_interpreter, provideEnv(extractToken(req), _appConfig))(req)
+                executeRequest(_interpreter, provideEnv(extractToken(req), _storage, _appConfig))(req)
               case GET -> Root / "graphiql" =>
                 staticResource("static/graphiql.html")
               case GET -> Root / "login.html" =>
@@ -110,8 +112,8 @@ object Main extends CatsApp {
       .flatMap(JWT.removeBearerAndDecodeTokenPayload)
       .mapError(AuthException)
 
-  def provideEnv(token: RIO[Clock with Has[JWTConfig], User], appConfig: AppConfig): ZEnv => Env =
+  def provideEnv(token: RIO[Clock with Has[JWTConfig], User], storage: Storage, appConfig: AppConfig): ZEnv => Env =
     (env: ZEnv) =>
-      env ++ storage.fakeStorage ++ Has(appConfig) ++
+      env ++ storage ++ Has(appConfig) ++
         Has(auth.SimpleService(token.provide(env ++ Has(appConfig.jwt))))
 }
